@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+checkpoints/*.pt
+data/raw/*
+data/packed/*
+!data/raw/.gitkeep
+!data/packed/.gitkeep
+*.bin
