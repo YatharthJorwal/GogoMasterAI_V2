@@ -48,17 +48,27 @@ def iter_wikipedia(num_docs: int, lang: str = "20231101.en"):
 
 
 def tokenize_stream_to_shard(doc_iter, tokenizer: Tokenizer, out_path: str, shard_token_capacity: int):
-    """Tokenize a stream of documents, append <eos> between docs, write uint16 shards."""
-    buf = []
+    """Tokenize a stream of documents, append <eos> between docs, write uint16 shards.
+
+    Buffers tokens in an array.array('H') rather than a plain Python list: a list
+    of N Python int objects costs ~28+ bytes/element (plus pointer overhead and
+    extra headroom during list.extend's internal resizing), so a 50M-token list
+    can balloon past 1.8GB. array('H') stores each token as a raw 2-byte C
+    unsigned short, so the same buffer is ~100MB -- this is what was blowing up
+    memory on the FineWeb-Edu pass.
+    """
+    import array
+
+    buf = array.array("H")
     shard_idx = 0
     total_tokens = 0
     eos_id = tokenizer.token_to_id("<eos>")
 
     def flush(buf, shard_idx):
-        arr = np.array(buf, dtype=np.uint16)
         path = f"{out_path}.{shard_idx:04d}.bin"
-        arr.tofile(path)
-        print(f"  wrote {path}: {len(arr):,} tokens")
+        with open(path, "wb") as f:
+            buf.tofile(f)
+        print(f"  wrote {path}: {len(buf):,} tokens")
 
     for doc in doc_iter:
         ids = tokenizer.encode(doc).ids
@@ -68,9 +78,9 @@ def tokenize_stream_to_shard(doc_iter, tokenizer: Tokenizer, out_path: str, shar
         if len(buf) >= shard_token_capacity:
             flush(buf, shard_idx)
             shard_idx += 1
-            buf = []
+            buf = array.array("H")
 
-    if buf:
+    if len(buf) > 0:
         flush(buf, shard_idx)
 
     print(f"Total tokens for {out_path}: {total_tokens:,}")
