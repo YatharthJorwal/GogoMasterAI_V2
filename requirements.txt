@@ -2,3 +2,4 @@ torch>=2.3
 tokenizers>=0.19
 datasets>=2.19
 numpy>=1.26
+matplotlib>=3.8

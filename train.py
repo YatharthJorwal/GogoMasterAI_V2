@@ -130,6 +130,12 @@ def main():
     tokens_per_step = args.micro_batch_size * args.grad_accum_steps * args.seq_len
     print(f"Effective batch: {tokens_per_step:,} tokens/optimizer-step")
 
+    log_path = os.path.join(args.out_dir, "train_log.csv")
+    log_is_new = not os.path.exists(log_path)
+    log_file = open(log_path, "a", newline="")
+    if log_is_new:
+        log_file.write("step,loss,lr,tok_per_sec,wall_time\n")
+
     amp_dtype = torch.bfloat16 if device == "cuda" and torch.cuda.is_bf16_supported() else torch.float32
     model.train()
     t0 = time.time()
@@ -156,6 +162,8 @@ def main():
             dt = time.time() - t0
             tok_per_sec = tokens_per_step * 10 / dt if step > start_step else 0
             print(f"step {step:6d} | loss {loss_accum:.4f} | lr {lr:.2e} | {tok_per_sec:,.0f} tok/s")
+            log_file.write(f"{step},{loss_accum:.6f},{lr:.8e},{tok_per_sec:.1f},{time.time():.1f}\n")
+            log_file.flush()
             t0 = time.time()
 
         if step > 0 and step % args.save_every == 0:
@@ -168,6 +176,7 @@ def main():
     torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
                 "step": args.max_steps, "config": cfg}, final_path)
     print(f"Training complete. Saved {final_path}")
+    log_file.close()
 
 
 if __name__ == "__main__":
